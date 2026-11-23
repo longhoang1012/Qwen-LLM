@@ -68,51 +68,44 @@ từ nội dung chưa được duyệt.
 
 ## Dùng: sinh và chạy script test (Web Runner)
 
-Phần này hiện là **thư viện Python**, chưa có lệnh CLI riêng — và còn
-thiếu bước đọc ngược file Excel đã duyệt thành testcase (xem "Còn thiếu"
-bên dưới). Ví dụ gọi trực tiếp:
+Hai bước **tách biệt có chủ đích** — sinh script xong luôn có cơ hội tự
+đọc/sửa trước khi chạy, hệ thống không bao giờ tự chạy ngay sau khi sinh:
 
-```python
-from qwen_test_automation.models import TestCase
-from qwen_test_automation.history.db import init_db
-from qwen_test_automation.config.credentials import load_credentials
-from qwen_test_automation.config.host_allowlist import load_allowed_hosts
-from qwen_test_automation.llm.ollama_client import OllamaClient
-from qwen_test_automation.runner.web_runner import ensure_script_generated, run_web_testcase
+```bash
+# Bước 1 — đọc file Excel đã review, sinh script cho từng testcase (WTS/MWTS),
+# lưu vào scripts/ — CHƯA chạy gì. Tự mở file trong scripts/ ra đọc trước khi
+# qua bước 2, nhất là với testcase liên quan giao dịch thật.
+python cli.py generate-script testcases/ra.xlsx
 
-client = OllamaClient()
-allowed_hosts = load_allowed_hosts("config_local/host_allowlist.json")
-credentials = load_credentials("config_local/credentials.json")
-conn = init_db("history.db")
-
-testcase = TestCase(
-    id="TC-001", feature="Đăng nhập", precondition="Tài khoản tồn tại",
-    steps=["Mở trang đăng nhập", "Nhập tài khoản/mật khẩu", "Nhập OTP"],
-    expected_result="Vào được trang chủ", platform="WTS",
-)
-
-# Bước 1 — sinh script, lưu vào scripts/ để bạn tự xem/sửa trước khi chạy.
-ensure_script_generated(testcase, client, "qwen2.5-coder:7b", "scripts", allowed_hosts)
-
-# Bước 2 — chạy (tách biệt, chủ động, sau khi đã xem qua script ở bước 1).
-status = run_web_testcase(
-    testcase, "https://<host-thật-trong-allowlist>",
-    allowed_hosts, "scripts", conn,
-    credentials=credentials, account="<số-tài-khoản-test>",
-)
-print(status)  # "pass" | "fail" | "pending_claude_review" | "blocked"
+# Bước 2 — chạy các script đã có trong scripts/ (không tự sinh thêm).
+python cli.py run-tests testcases/ra.xlsx \
+    --url https://<host-thật-nằm-trong-host_allowlist.json> \
+    --account <số-tài-khoản-test>
 ```
+
+`run-tests` in ra `pass` / `fail` / `pending_claude_review` (cần xem lại
+thủ công hoặc nhờ Claude) / `blocked` (script tham chiếu một host không
+nằm trong allowlist) cho từng testcase, kèm tổng kết cuối. Testcase thuộc
+nền tảng mobile (MTS-Android/MTS-iOS) bị bỏ qua rõ ràng (chưa có Mobile
+Runner). Gõ `python cli.py generate-script --help` / `run-tests --help`
+để xem hết các tuỳ chọn (`--scripts-dir`, `--history-db`, `--timeout`...).
+
+Muốn gọi trực tiếp bằng Python (ví dụ để tích hợp vào chỗ khác) thay vì
+qua CLI, xem `cli.py`'s `_generate_scripts`/`_run_tests` — chúng gọi
+thẳng `ensure_script_generated`/`run_web_testcase` trong
+`qwen_test_automation.runner.web_runner`.
 
 ## Trạng thái hiện tại / còn thiếu
 
 - ✅ Foundation (model, config, SQLite history, Ollama client)
 - ✅ Ingestion (docs → testcase Excel theo chuẩn QC)
-- ✅ Web Runner (chạy test WTS/MWTS an toàn — có safety gate, retry,
-  phân loại lỗi) — nhưng mới có API Python, **chưa có lệnh CLI**, và
-  **chưa đọc được file Excel đã duyệt** để lấy testcase chạy (phải tự
-  gõ `TestCase(...)` như ví dụ trên).
+- ✅ Web Runner (chạy test WTS/MWTS an toàn — safety gate, retry, phân
+  loại lỗi) + đọc ngược Excel + CLI `generate-script`/`run-tests` — luồng
+  docs → Excel → review → sinh script → review → chạy đã nối liền hoàn
+  toàn cho WTS/MWTS.
 - ⬜ Mobile Runner (MTS, Android/iOS)
-- ⬜ Reporting (gộp kết quả thành Excel report cuối)
+- ⬜ Reporting (gộp kết quả `history.db` trở lại vào file Excel —
+  Pass/Fail/Blocked/Not run, kèm sheet Bug list)
 - ⬜ Redmine API thật (hiện chỉ đọc file `.txt`/`.md` đã export tay)
 
 ## An toàn
