@@ -9,3 +9,10 @@ qwen-test-automation/.venv/
 
 # Qwen automation local secrets — never commit real credentials/hosts
 qwen-test-automation/config_local/
+
+# Qwen automation local run state — generated locally, never committed
+qwen-test-automation/*.db
+qwen-test-automation/history.db
+qwen-test-automation/scripts/
+qwen-test-automation/testcases/
+qwen-test-automation/reports/
