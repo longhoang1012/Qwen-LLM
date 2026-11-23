@@ -115,6 +115,15 @@ qwen-test-automation/
 3. `runner/` chạy script đã có (B). Nếu không có script cho testcase đó, hoặc
    script fail cần xác minh, `runner/` fallback sang gọi Claude in Chrome / Claude
    mobile tool (C) cho đúng testcase đó.
+
+   **Lưu ý quan trọng (phát hiện lúc review Web Runner, 2026-11-23): bước 2 và
+   bước 3 là hai bước TÁCH BIỆT, không được gộp làm một.** `runner/` (bước 3)
+   không được tự gọi Qwen sinh script khi thấy thiếu — nếu chưa có script, đó
+   chính là ca "không có script" ở trên, xử lý y như spec đã ghi (đánh dấu cần
+   Claude). Việc sinh script (bước 2) là một hành động riêng, có chủ đích, tạo
+   ra file trong `scripts/` để con người review trước — đây chính là "cửa sổ
+   review" mà anti-goal ở mục 4 muốn có cho testcase, áp dụng tương tự cho
+   script. Plan Mobile Runner (sắp tới) cần giữ đúng sự tách bạch này.
 4. Trong lúc chạy mobile, `capture/` ghi logcat (qua `adb logcat`) và traffic
    API/Socket (qua mitmproxy hoặc cấu hình proxy trên emulator/simulator).
 5. `reports/` tổng hợp kết quả (từ `history.db` + log/ảnh lỗi) thành Excel sau

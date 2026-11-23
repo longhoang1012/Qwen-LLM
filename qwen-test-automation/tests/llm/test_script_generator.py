@@ -58,3 +58,51 @@ def test_generate_script_prompt_differs_between_mobile_platforms():
     client_ios = FakeClient("script")
     generate_script(make_testcase("MTS-iOS"), client=client_ios, model="qwen2.5-coder:7b")
     assert client_android.last_prompt != client_ios.last_prompt
+
+
+def test_generate_script_prompt_forbids_real_transaction_submit():
+    client = FakeClient("script")
+    generate_script(make_testcase("WTS"), client=client, model="qwen2.5-coder:7b")
+    assert "không bấm" in client.last_prompt or "dừng trước" in client.last_prompt
+
+
+def test_generate_script_prompt_requires_standalone_sync_api_script():
+    client = FakeClient("script")
+    generate_script(make_testcase("WTS"), client=client, model="qwen2.5-coder:7b")
+    assert "playwright.sync_api" in client.last_prompt
+    assert "pytest" in client.last_prompt  # instructed not to use it
+
+
+def test_generate_script_prompt_tells_qwen_to_read_credentials_from_env():
+    client = FakeClient("script")
+    generate_script(make_testcase("WTS"), client=client, model="qwen2.5-coder:7b")
+    assert "QWEN_TEST_ACCOUNT" in client.last_prompt
+    assert "QWEN_TEST_PASSWORD" in client.last_prompt
+    assert "QWEN_TEST_OTP" in client.last_prompt
+
+
+def test_generate_script_prompt_tells_qwen_to_use_base_url_env_var():
+    client = FakeClient("script")
+    generate_script(make_testcase("WTS"), client=client, model="qwen2.5-coder:7b")
+    assert "QWEN_TEST_BASE_URL" in client.last_prompt
+
+
+def test_generate_script_prompt_puts_safety_rule_before_testcase_steps():
+    client = FakeClient("script")
+    generate_script(make_testcase("WTS"), client=client, model="qwen2.5-coder:7b")
+    safety_idx = client.last_prompt.find("dừng trước")
+    steps_idx = client.last_prompt.find("Steps:")
+    assert safety_idx != -1 and steps_idx != -1
+    assert safety_idx < steps_idx
+
+
+def test_generate_script_prompt_tells_qwen_to_assert_expected_result():
+    client = FakeClient("script")
+    generate_script(make_testcase("WTS"), client=client, model="qwen2.5-coder:7b")
+    assert "assert" in client.last_prompt.lower()
+
+
+def test_generate_script_prompt_mobile_does_not_mention_playwright():
+    client = FakeClient("script")
+    generate_script(make_testcase("MTS-Android"), client=client, model="qwen2.5-coder:7b")
+    assert "playwright" not in client.last_prompt.lower()

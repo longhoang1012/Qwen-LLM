@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS testcases (
 CREATE TABLE IF NOT EXISTS runs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   testcase_id TEXT NOT NULL REFERENCES testcases(id),
-  status TEXT NOT NULL CHECK(status IN ('pass','fail','pending_claude_review')),
+  status TEXT NOT NULL CHECK(status IN ('pass','fail','pending_claude_review','blocked')),
   failure_type TEXT CHECK(failure_type IN ('locator','assertion') OR failure_type IS NULL),
   message TEXT, started_at TEXT DEFAULT CURRENT_TIMESTAMP
 );

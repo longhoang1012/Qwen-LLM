@@ -45,3 +45,10 @@ def test_pending_review_excludes_testcase_whose_latest_run_is_resolved(tmp_path)
     record_run(conn, "TC-001", "pending_claude_review", "locator", "selector not found")
     record_run(conn, "TC-001", "pass", None, "resolved by Claude")
     assert get_pending_review(conn) == []
+
+
+def test_record_run_accepts_blocked_status(tmp_path):
+    conn = init_db(str(tmp_path / "history.db"))
+    insert_testcase(conn, make_testcase())
+    run_id = record_run(conn, "TC-001", "blocked", None, "host not in allowlist")
+    assert isinstance(run_id, int)

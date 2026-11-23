@@ -6,3 +6,7 @@ requests>=2.31
 urllib3<2
 PyMuPDF>=1.24
 openpyxl>=3.1
+# Only needed to actually execute generated web test scripts (not by the
+# test suite itself, which runs plain Python scripts). After installing,
+# also run `playwright install chromium` once to fetch the browser binary.
+playwright>=1.47
