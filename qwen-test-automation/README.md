@@ -5,10 +5,21 @@ chạy local qua Ollama để đỡ tốn token Claude cho các việc lặp l�
 tài liệu, sinh testcase, sinh script, chạy test). Thiết kế đầy đủ xem
 [docs/superpowers/specs/2026-11-20-local-qwen-automation-design.md](../docs/superpowers/specs/2026-11-20-local-qwen-automation-design.md).
 
+## Cài đặt nhanh (1 lệnh)
+
+```bash
+cd qwen-test-automation
+./setup.sh                # venv + Ollama + 2 model + config_local/
+./setup.sh --with-browser # thêm cả Playwright + Chromium (~300MB, cần khi chạy test thật)
+```
+
+Script tự bỏ qua phần đã cài nếu chạy lại — an toàn khi chạy nhiều lần.
+Chi tiết từng bước script làm, xem phần dưới.
+
 ## Cài đặt (máy mới, kể cả máy khác ngoài máy đang code)
 
 Mã nguồn nằm trên git (repo này), nhưng 3 thứ sau **không** nằm trong git,
-phải tự cài/tạo lại trên mỗi máy:
+phải tự cài/tạo lại trên mỗi máy (`setup.sh` ở trên làm tự động cả 3 bước này):
 
 1. **Clone repo** (repo private, cần quyền truy cập GitHub trên máy đó):
    ```bash
