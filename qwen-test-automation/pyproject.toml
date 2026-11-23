@@ -1,0 +1,6 @@
+[tool.pytest.ini_options]
+pythonpath = ["."]
+# All tests in this project are plain functions; disable class-based
+# collection so pytest doesn't try (and warn) to collect the TestCase
+# dataclass as a test class.
+python_classes = []

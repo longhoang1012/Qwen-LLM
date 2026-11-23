@@ -1,0 +1,11 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+qwen-test-automation/.venv/
+
+# Qwen automation local secrets — never commit real credentials/hosts
+qwen-test-automation/config_local/

@@ -1,0 +1,6 @@
+pytest>=8.0
+requests>=2.31
+# macOS system Python 3.9 links against LibreSSL, not OpenSSL 1.1.1+;
+# urllib3 2.x warns (NotOpenSSLWarning) on every import under that
+# combination. Pin to the 1.x line, which has no such requirement.
+urllib3<2
