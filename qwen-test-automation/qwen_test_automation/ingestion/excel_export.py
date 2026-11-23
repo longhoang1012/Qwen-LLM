@@ -1,11 +1,11 @@
 import openpyxl
 
-_PLATFORM_COLUMNS = ["WTS", "MWTS", "MTS-Android", "MTS-iOS"]
+PLATFORM_COLUMNS = ["WTS", "MWTS", "MTS-Android", "MTS-iOS"]
 
 _HEADER = (
     ["Tính năng", "ID", "Nhóm", "Màn hình/module", "Tiêu đề",
      "Tiền điều kiện", "Bước thực hiện", "Kết quả mong đợi"]
-    + _PLATFORM_COLUMNS
+    + PLATFORM_COLUMNS
     + ["Bug ID", "Ghi chú"]
 )
 
@@ -35,7 +35,7 @@ def export_scenarios_to_excel(scenarios: list, path: str) -> None:
             steps_text,
             scenario.expected_result,
         ]
-        for platform in _PLATFORM_COLUMNS:
+        for platform in PLATFORM_COLUMNS:
             row.append("Not run" if platform in scenario.applicable_platforms else "N/A")
         row.append("")  # Bug ID
         row.append("")  # Ghi chú
