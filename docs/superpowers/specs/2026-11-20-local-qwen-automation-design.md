@@ -59,6 +59,12 @@ cho những việc thật sự cần khả năng "hiểu" linh hoạt.
 - Tránh để `runner/` tự động login/thao tác trên một host chưa được xác nhận là
   môi trường test/UAT (xem "Safety gate" ở mục 6) — tránh nguy cơ đặt lệnh/di
   chuyển tiền thật nếu lỡ trỏ nhầm vào production.
+- **Tránh để `runner/` tự bấm các hành động giao dịch thật** (đặt/sửa/huỷ lệnh,
+  chuyển/rút tiền) **dù đang ở môi trường UAT đã xác nhận an toàn.** Đây là rule
+  riêng, tách biệt với safety gate theo host ở trên: ngay cả trên host UAT hợp
+  lệ, các bước này chỉ được `runner`/script dừng lại và ghi nhận kết quả kỳ vọng
+  (theo testcase), không tự thực thi. Script B khi sinh ra cho các testcase loại
+  này phải dừng trước bước submit cuối, không bấm nút xác nhận giao dịch.
 
 ## 5. Approaches đã cân nhắc
 
@@ -180,10 +186,14 @@ chạy đó, không lưu OTP đó lại.
 - Redmine: cần API token để tự động kéo ticket — **chưa có lúc viết thiết kế này**.
   Giai đoạn đầu `ingestion/` hỗ trợ nhận text paste/export thủ công từ Redmine;
   bổ sung gọi API thật khi có token (xem mục 9).
-- Đây là git worktree riêng (`claude/local-qwen-llm-automation-0ab021`) trong repo
-  vốn là backup Claude skills của Shinhan — không liên quan tới nội dung repo gốc,
-  nên code của project này nên nằm gọn trong thư mục `qwen-test-automation/` để
-  không lẫn với phần backup skill.
+- Phát triển trong git worktree (`claude/local-qwen-llm-automation-0ab021`) của
+  repo backup Claude skills của Shinhan — không liên quan tới nội dung repo gốc,
+  nên code của project này nằm gọn trong thư mục `qwen-test-automation/` để
+  không lẫn với phần backup skill. Sau mỗi plan hoàn thành, nội dung
+  `qwen-test-automation/` + `docs/` được đồng bộ (lịch sử sạch, không kéo theo
+  commit skill-backup) sang repo riêng, private:
+  **github.com/longhoang1012/Qwen-LLM**, nhánh `local-qwen-llm-automation`
+  (bổ sung 2026-11-23).
 
 ## 8. Việc để builder tự quyết (không cần hỏi lại user)
 
@@ -211,3 +221,49 @@ chạy đó, không lưu OTP đó lại.
 - Ý nghĩa/khác biệt giữa 8 account test (có account nào dành riêng cho tính năng
   gì không, hay dùng account nào cũng được) — không chặn thiết kế, nhưng cần biết
   lúc viết testcase cụ thể.
+
+## 10. Quy ước định dạng QC (testcase/report) — bổ sung 2026-11-23
+
+Dựa theo skill nội bộ `qc-testcase-writing` (quy ước QC Shinhan Securities
+Vietnam) — bắt buộc với mọi testcase/report mà hệ thống sinh ra, để đọc như
+chính QC viết, không lộ dấu vết AI/công cụ:
+
+- **Giọng văn**: tiếng Việt, ngôi trung tính (điều kiện – thao tác – kết quả),
+  không tự xưng, không nhãn quy trình ("QC xác nhận", "Claude soi", "đã test"...).
+  Prompt sinh testcase (`llm/generate_testcase`) phải nhúng chỉ dẫn giọng văn
+  này — hiện tại (Foundation) chưa có, cần bổ sung ở Plan Ingestion.
+- **Trạng thái** chỉ dùng: Pass · Fail · Blocked · Not run · N/A — không chế
+  thêm nhãn. Nội bộ `history.db` vẫn dùng `pass/fail/pending_claude_review`
+  (dễ cho logic dispatch), quy đổi sang 5 giá trị này **chỉ ở bước xuất Excel**
+  (Plan Reporting): `pending_claude_review` chưa xử lý xong → "Not run";
+  testcase không áp dụng cho 1 platform cụ thể → "N/A"; chạy không được do
+  precondition/safety-gate chặn → "Blocked" (runner cần thêm giá trị nội bộ
+  mới cho ca này khi build Plan Runner, chưa có trong Foundation).
+- **Cột Excel sheet "Test cases"**: Tính năng · ID · Nhóm · Màn hình/module ·
+  Tiêu đề · Tiền điều kiện · Bước thực hiện · Kết quả mong đợi · (các cột
+  nền tảng, tuỳ task — ở đây là WTS/MWTS/MTS-Android/MTS-iOS) · Bug ID ·
+  Ghi chú. Đây là **1 dòng = 1 kịch bản test, nhiều cột nền tảng** (có thể N/A
+  ở một số nền tảng) — khác với `TestCase` của Foundation, vốn là **1 record =
+  1 nền tảng cụ thể** (đúng cho việc sinh script/chạy test ở Plan Runner, vì
+  một script Playwright/Appium luôn gắn với đúng 1 nền tảng).
+
+  Quyết định: thêm một model mới `TestScenario` (Plan Ingestion) — id, nhóm,
+  màn hình/module, tiêu đề, tiền điều kiện, bước thực hiện, kết quả mong đợi,
+  danh sách nền tảng áp dụng (`applicable_platforms`, tập con của
+  `VALID_PLATFORMS`). `ingestion/` sinh ra `TestScenario` (không phải
+  `TestCase` trực tiếp) và xuất thẳng ra Excel theo đúng cột QC ở trên, với
+  mỗi cột nền tảng = "Not run" nếu nằm trong `applicable_platforms`, "N/A"
+  nếu không. Khi tới Plan Runner cần chạy, mỗi `TestScenario` + 1 nền tảng
+  trong `applicable_platforms` của nó mới được tách ra thành 1 `TestCase`
+  (hàm `to_testcase(scenario, platform)`) để đưa vào `generate_script`/chạy
+  test như thiết kế ban đầu. `Bug ID`/`Ghi chú` gắn với từng lần chạy (run),
+  không phải thuộc tính tĩnh — Plan Ingestion chỉ để trống các cột này (vì
+  chưa chạy), Plan Runner/Reporting điền sau.
+- Xoá khỏi report những testcase N/A trên **cả 3 nền tảng**.
+- Bug list nằm sheet riêng, kèm ảnh, mức độ High/Medium/Low — thuộc Plan
+  Reporting, không phải Plan Ingestion.
+- OTP môi trường test mặc định nhập thẳng (không cần dừng hỏi), trừ khi task
+  yêu cầu OTP khác — khớp với cơ chế credential đã thiết kế ở mục 6.
+- Khi fallback sang Claude in Chrome/mobile tool để xử lý thật, output (report,
+  Ghi chú) vẫn phải theo đúng giọng văn QC ở trên — không mô tả bước đó là
+  thao tác của AI.

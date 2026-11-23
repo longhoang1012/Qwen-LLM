@@ -4,3 +4,9 @@ pythonpath = ["."]
 # collection so pytest doesn't try (and warn) to collect the TestCase
 # dataclass as a test class.
 python_classes = []
+filterwarnings = [
+    # PyMuPDF's SWIG bindings trigger this on Python 3.9 at import time;
+    # it's a library-internal compatibility notice, not something our
+    # code can fix or that indicates a real problem here.
+    "ignore:builtin type .* has no __module__ attribute:DeprecationWarning",
+]

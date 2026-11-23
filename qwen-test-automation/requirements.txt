@@ -4,3 +4,5 @@ requests>=2.31
 # urllib3 2.x warns (NotOpenSSLWarning) on every import under that
 # combination. Pin to the 1.x line, which has no such requirement.
 urllib3<2
+PyMuPDF>=1.24
+openpyxl>=3.1
