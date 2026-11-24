@@ -57,8 +57,9 @@ echo "Ollama server: $(curl -s -o /dev/null --max-time 2 http://localhost:11434 
 
 echo
 echo "== 3/5: Model Qwen (có thể mất vài phút lần đầu) =="
-ollama pull qwen2.5:7b
-ollama pull qwen2.5vl:7b
+ollama pull qwen2.5:7b        # sinh testcase (generate-scenarios/prepare-tests)
+ollama pull qwen2.5vl:7b      # đọc ảnh/PDF scan
+ollama pull qwen2.5-coder:7b  # sinh script (generate-script/prepare-tests)
 echo "OK"
 
 echo

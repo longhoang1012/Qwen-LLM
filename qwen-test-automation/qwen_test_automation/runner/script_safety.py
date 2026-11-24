@@ -5,6 +5,11 @@ from qwen_test_automation.config.host_allowlist import is_host_allowed
 from qwen_test_automation.runner.safety_gate import HostNotAllowedError
 
 _URL_PATTERN = re.compile(r"https?://[^\s'\"]+")
+# Qwen coder models often preface or follow a fenced code block with a
+# plain-English sentence even when told not to ("Here's a Python script
+# that..."), so the fence isn't always the first/last thing in the
+# response. Find a ```...``` block anywhere and keep only its contents.
+_FENCE_PATTERN = re.compile(r"```(?:[A-Za-z0-9_+-]*\n)?(.*?)```", re.DOTALL)
 
 
 class ScriptCompileError(Exception):
@@ -13,14 +18,10 @@ class ScriptCompileError(Exception):
 
 def strip_code_fence(text: str) -> str:
     stripped = text.strip()
-    if not stripped.startswith("```"):
-        return stripped
-    lines = stripped.splitlines()
-    if lines and lines[0].startswith("```"):
-        lines = lines[1:]
-    if lines and lines[-1].strip() == "```":
-        lines = lines[:-1]
-    return "\n".join(lines)
+    match = _FENCE_PATTERN.search(stripped)
+    if match:
+        return match.group(1).strip()
+    return stripped
 
 
 def assert_script_compiles(source: str) -> None:

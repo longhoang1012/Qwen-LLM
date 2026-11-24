@@ -9,7 +9,7 @@ tài liệu, sinh testcase, sinh script, chạy test). Thiết kế đầy đủ
 
 ```bash
 cd qwen-test-automation
-./setup.sh                # venv + Ollama + 2 model + config_local/
+./setup.sh                # venv + Ollama + 3 model + config_local/
 ./setup.sh --with-browser # thêm cả Playwright + Chromium (~300MB, cần khi chạy test thật)
 ```
 
@@ -38,8 +38,9 @@ phải tự cài/tạo lại trên mỗi máy (`setup.sh` ở trên làm tự đ
 3. **Ollama** (bắt buộc cho mọi bước sinh testcase/script):
    ```bash
    brew install ollama
-   ollama pull qwen2.5:7b        # model text/code
+   ollama pull qwen2.5:7b        # sinh testcase
    ollama pull qwen2.5vl:7b      # model đọc ảnh/PDF scan
+   ollama pull qwen2.5-coder:7b  # sinh script
    ```
 
 4. **Playwright** (chỉ cần khi thực sự *chạy* test trên WTS/MWTS, không
