@@ -1,4 +1,5 @@
 import argparse
+import os
 
 from qwen_test_automation.models import to_testcase
 from qwen_test_automation.llm.ollama_client import OllamaClient
@@ -7,8 +8,10 @@ from qwen_test_automation.config.host_allowlist import load_allowed_hosts
 from qwen_test_automation.history.db import init_db
 from qwen_test_automation.ingestion.pipeline import run_ingestion
 from qwen_test_automation.ingestion.excel_import import read_scenarios_from_excel
+from qwen_test_automation.reporting.final_report import write_final_report
 from qwen_test_automation.runner.safety_gate import HostNotAllowedError
 from qwen_test_automation.runner.script_safety import ScriptCompileError
+from qwen_test_automation.runner.script_store import load_script
 from qwen_test_automation.runner.web_runner import ensure_script_generated, run_web_testcase
 
 
@@ -20,12 +23,20 @@ def _generate_scripts(scenarios, scripts_dir, allowed_hosts, client, model, supp
             if platform not in supported_platforms:
                 results.append((testcase.id, "skipped_unsupported_platform"))
                 continue
+            # Checked before calling ensure_script_generated (which itself
+            # returns an existing script's path unchanged) so the caller
+            # can tell "generated now" from "reused from a previous run" —
+            # otherwise a second document whose LLM-chosen testcase ids
+            # happen to collide with an earlier one silently keeps running
+            # the earlier script while being reported as freshly generated.
+            already_existed = load_script(testcase.id, scripts_dir) is not None
             try:
                 path = ensure_script_generated(testcase, client, model, scripts_dir, allowed_hosts)
             except (ScriptCompileError, HostNotAllowedError) as e:
                 results.append((testcase.id, f"error: {e}"))
                 continue
-            results.append((testcase.id, path))
+            label = "reused" if already_existed else "generated"
+            results.append((testcase.id, f"{label}: {path}"))
     return results
 
 
@@ -71,6 +82,31 @@ def _require_nonempty_allowlist(host_allowlist_path):
     return allowed_hosts
 
 
+def _default_report_path(testcases_xlsx):
+    base, ext = os.path.splitext(testcases_xlsx)
+    return f"{base}_report{ext}"
+
+
+def _print_generate_results(results):
+    reused_count = 0
+    for testcase_id, result in results:
+        if result == "skipped_unsupported_platform":
+            print(f"{testcase_id}: bỏ qua (nền tảng mobile chưa được CLI này hỗ trợ)")
+        elif isinstance(result, str) and result.startswith("error:"):
+            print(f"{testcase_id}: {result}")
+        elif isinstance(result, str) and result.startswith("reused:"):
+            path = result[len("reused:"):].strip()
+            print(f"{testcase_id}: dùng lại script có sẵn {path} (CHƯA sinh mới — nếu đây là tài liệu khác, kiểm tra script này còn đúng không)")
+            reused_count += 1
+        elif isinstance(result, str) and result.startswith("generated:"):
+            path = result[len("generated:"):].strip()
+            print(f"Generated {path} for {testcase_id} — review before running")
+        else:
+            print(f"{testcase_id}: {result}")
+    if reused_count:
+        print(f"\nLưu ý: {reused_count} testcase dùng lại script đã có sẵn trong scripts-dir (không sinh mới).")
+
+
 def main():
     parser = argparse.ArgumentParser(prog="cli.py")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -100,6 +136,21 @@ def main():
     genscript.add_argument("--ollama-url", default="http://localhost:11434")
     genscript.add_argument("--timeout", type=int, default=120)
 
+    prepare = subparsers.add_parser(
+        "prepare-tests",
+        help="Gộp generate-scenarios + generate-script: docs -> testcase Excel -> script, "
+             "vẫn chỉ sinh, không chạy gì",
+    )
+    prepare.add_argument("doc_path", help="Đường dẫn file đầu vào (.pdf/.txt/.md/.png/.jpg/.jpeg)")
+    prepare.add_argument("out_path", help="Đường dẫn file Excel testcase sẽ ghi ra")
+    prepare.add_argument("--scripts-dir", default="scripts")
+    prepare.add_argument("--host-allowlist", default="config_local/host_allowlist.json")
+    prepare.add_argument("--text-model", default="qwen2.5:7b")
+    prepare.add_argument("--vision-model", default="qwen2.5vl:7b")
+    prepare.add_argument("--script-model", default="qwen2.5-coder:7b")
+    prepare.add_argument("--ollama-url", default="http://localhost:11434")
+    prepare.add_argument("--timeout", type=int, default=120)
+
     runtests = subparsers.add_parser(
         "run-tests",
         help="Chạy các script đã sinh/đã review trong scripts-dir (không tự sinh script mới)",
@@ -112,6 +163,10 @@ def main():
     runtests.add_argument("--account", default=None)
     runtests.add_argument("--history-db", default="history.db")
     runtests.add_argument("--timeout", type=int, default=60)
+    runtests.add_argument(
+        "--report", default=None,
+        help="Đường dẫn report cuối (mặc định: <file input>_report.xlsx)",
+    )
 
     args = parser.parse_args()
 
@@ -132,14 +187,26 @@ def main():
         client = OllamaClient(base_url=args.ollama_url, timeout=args.timeout)
         scenarios = read_scenarios_from_excel(args.testcases_xlsx)
         results = _generate_scripts(scenarios, args.scripts_dir, allowed_hosts, client, args.text_model)
-        for testcase_id, result in results:
-            if result == "skipped_unsupported_platform":
-                print(f"{testcase_id}: bỏ qua (nền tảng mobile chưa được CLI này hỗ trợ)")
-            elif isinstance(result, str) and result.startswith("error:"):
-                print(f"{testcase_id}: {result}")
-            else:
-                print(f"Generated {result} for {testcase_id} — review before running")
+        _print_generate_results(results)
         print(f"Done: {len(results)} testcase(s) processed in {args.scripts_dir}/")
+
+    elif args.command == "prepare-tests":
+        try:
+            allowed_hosts = _require_nonempty_allowlist(args.host_allowlist)
+        except ValueError as e:
+            print(f"Lỗi: {e}")
+            return
+        client = OllamaClient(base_url=args.ollama_url, timeout=args.timeout)
+        scenarios = run_ingestion(
+            args.doc_path, args.out_path, client,
+            text_model=args.text_model, vision_model=args.vision_model,
+        )
+        print(f"Đã sinh {len(scenarios)} testcase vào {args.out_path}")
+        results = _generate_scripts(scenarios, args.scripts_dir, allowed_hosts, client, args.script_model)
+        _print_generate_results(results)
+        print(f"\nĐã sinh {len(results)} script vào {args.scripts_dir}/.")
+        print(f"Review {args.out_path} và các file trong {args.scripts_dir}/ trước khi chạy.")
+        print(f"Khi sẵn sàng: python cli.py run-tests {args.out_path} --url <host> --account <account>")
 
     elif args.command == "run-tests":
         try:
@@ -165,6 +232,10 @@ def main():
             print(f"{testcase_id}: {status}")
             counts[status] = counts.get(status, 0) + 1
         print(f"Tổng kết: {counts}")
+
+        report_path = args.report or _default_report_path(args.testcases_xlsx)
+        write_final_report(scenarios, conn, report_path)
+        print(f"Report: {report_path}")
 
 
 if __name__ == "__main__":

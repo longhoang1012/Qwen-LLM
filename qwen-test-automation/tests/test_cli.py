@@ -7,7 +7,13 @@ from qwen_test_automation.history.db import init_db
 from qwen_test_automation.runner.script_store import save_script, load_script
 from qwen_test_automation.runner.safety_gate import HostNotAllowedError
 from qwen_test_automation.config.credentials import CredentialsError
-from cli import _generate_scripts, _run_tests, _resolve_credentials, _require_nonempty_allowlist
+from cli import (
+    _generate_scripts,
+    _run_tests,
+    _resolve_credentials,
+    _require_nonempty_allowlist,
+    _default_report_path,
+)
 
 ALLOWED = {"uat.example.internal"}
 URL = "https://uat.example.internal"
@@ -50,6 +56,17 @@ def test_generate_scripts_writes_one_script_per_applicable_web_platform(tmp_path
     assert ids == ["SC-001-WTS", "SC-001-MWTS"]
     assert load_script("SC-001-WTS", scripts_dir) is not None
     assert load_script("SC-001-MWTS", scripts_dir) is not None
+
+
+def test_generate_scripts_distinguishes_reused_from_generated(tmp_path):
+    scripts_dir = str(tmp_path / "scripts")
+    save_script("SC-001-WTS", "import sys\nsys.exit(0)\n", scripts_dir)
+    client = FakeClient("import sys\nsys.exit(0)\n")
+    scenario = make_scenario(applicable_platforms=("WTS", "MWTS"))
+    results = _generate_scripts([scenario], scripts_dir, ALLOWED, client, "m")
+    statuses = dict(results)
+    assert statuses["SC-001-WTS"].startswith("reused:")
+    assert statuses["SC-001-MWTS"].startswith("generated:")
 
 
 def test_generate_scripts_reports_mobile_skip(tmp_path):
@@ -151,3 +168,8 @@ def test_require_nonempty_allowlist_returns_hosts_when_present(tmp_path):
     p = tmp_path / "allowlist.json"
     p.write_text(json.dumps(["uat.example.internal"]))
     assert _require_nonempty_allowlist(str(p)) == {"uat.example.internal"}
+
+
+def test_default_report_path_inserts_suffix_before_extension():
+    assert _default_report_path("out/ra.xlsx") == "out/ra_report.xlsx"
+    assert _default_report_path("ra.xlsx") == "ra_report.xlsx"

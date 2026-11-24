@@ -62,44 +62,47 @@ Mỗi máy chạy độc lập — model Ollama, browser Playwright, credentials
 `history.db` (SQLite lưu lịch sử chạy) đều là trạng thái **riêng của từng
 máy**, không đồng bộ qua git.
 
-## Dùng: sinh testcase từ tài liệu (Ingestion)
+## Dùng: docs → testcase + script (1 lệnh, chỉ sinh, không chạy)
 
 ```bash
 cd qwen-test-automation
 source .venv/bin/activate
-python cli.py generate-scenarios duong_dan_tai_lieu.pdf testcases/ra.xlsx
+python cli.py prepare-tests duong_dan_tai_lieu.pdf testcases/ra.xlsx
 ```
 
 Nhận `.pdf`, `.txt`/`.md` (nội dung Redmine đã export/paste), hoặc
-`.png`/`.jpg`/`.jpeg`. Kết quả là file Excel theo đúng cột chuẩn QC
-(Tính năng, ID, Nhóm, Màn hình/module, Tiêu đề, Tiền điều kiện, Bước thực
-hiện, Kết quả mong đợi, 4 cột nền tảng, Bug ID, Ghi chú) — **review/sửa
-tay file Excel này trước khi dùng tiếp**, hệ thống không tự ý chạy test
-từ nội dung chưa được duyệt.
+`.png`/`.jpg`/`.jpeg`. Lệnh này gộp 2 bước (sinh testcase Excel + sinh
+script cho từng testcase WTS/MWTS vào `scripts/`) — **nhưng cố tình
+không chạy gì cả**. Review/sửa `testcases/ra.xlsx` và các file trong
+`scripts/` trước khi qua bước chạy, nhất là với testcase liên quan giao
+dịch thật — đây là ranh giới an toàn duy nhất hệ thống giữ lại, không bỏ
+qua được bằng cờ nào.
 
-## Dùng: sinh và chạy script test (Web Runner)
+Nếu muốn làm từng bước riêng (ví dụ chỉ sinh testcase trước, để dành sinh
+script sau): `python cli.py generate-scenarios ...` rồi
+`python cli.py generate-script ...` — xem `--help` từng lệnh.
 
-Hai bước **tách biệt có chủ đích** — sinh script xong luôn có cơ hội tự
-đọc/sửa trước khi chạy, hệ thống không bao giờ tự chạy ngay sau khi sinh:
+## Dùng: chạy test + xuất report cuối
 
 ```bash
-# Bước 1 — đọc file Excel đã review, sinh script cho từng testcase (WTS/MWTS),
-# lưu vào scripts/ — CHƯA chạy gì. Tự mở file trong scripts/ ra đọc trước khi
-# qua bước 2, nhất là với testcase liên quan giao dịch thật.
-python cli.py generate-script testcases/ra.xlsx
-
-# Bước 2 — chạy các script đã có trong scripts/ (không tự sinh thêm).
 python cli.py run-tests testcases/ra.xlsx \
     --url https://<host-thật-nằm-trong-host_allowlist.json> \
     --account <số-tài-khoản-test>
 ```
 
-`run-tests` in ra `pass` / `fail` / `pending_claude_review` (cần xem lại
-thủ công hoặc nhờ Claude) / `blocked` (script tham chiếu một host không
-nằm trong allowlist) cho từng testcase, kèm tổng kết cuối. Testcase thuộc
-nền tảng mobile (MTS-Android/MTS-iOS) bị bỏ qua rõ ràng (chưa có Mobile
-Runner). Gõ `python cli.py generate-script --help` / `run-tests --help`
-để xem hết các tuỳ chọn (`--scripts-dir`, `--history-db`, `--timeout`...).
+Chạy mọi script đã có trong `scripts/` (không tự sinh thêm), in
+`pass`/`fail`/`pending_claude_review`/`blocked` cho từng testcase, rồi tự
+xuất **report cuối** `testcases/ra_report.xlsx` (đổi bằng `--report`) —
+sheet "Test cases" với trạng thái thật Pass/Fail/Blocked/Not run cho
+từng testcase×nền tảng, và sheet "Bug list" liệt kê các ca Fail. Testcase
+thuộc nền tảng mobile (MTS-Android/MTS-iOS) bị bỏ qua rõ ràng (chưa có
+Mobile Runner).
+
+Lưu ý: ID testcase do Qwen tự đặt (vd "TC-001"), nên nếu chạy
+`prepare-tests` cho một tài liệu khác mà trùng ID với lần trước,
+`scripts/` sẽ **dùng lại** script cũ thay vì sinh mới — CLI sẽ cảnh báo
+rõ dòng nào bị "dùng lại", nhưng nếu nghi ngờ hãy dùng `--scripts-dir`
+riêng cho mỗi tài liệu để tránh nhầm lẫn.
 
 Muốn gọi trực tiếp bằng Python (ví dụ để tích hợp vào chỗ khác) thay vì
 qua CLI, xem `cli.py`'s `_generate_scripts`/`_run_tests` — chúng gọi
@@ -111,12 +114,12 @@ thẳng `ensure_script_generated`/`run_web_testcase` trong
 - ✅ Foundation (model, config, SQLite history, Ollama client)
 - ✅ Ingestion (docs → testcase Excel theo chuẩn QC)
 - ✅ Web Runner (chạy test WTS/MWTS an toàn — safety gate, retry, phân
-  loại lỗi) + đọc ngược Excel + CLI `generate-script`/`run-tests` — luồng
-  docs → Excel → review → sinh script → review → chạy đã nối liền hoàn
-  toàn cho WTS/MWTS.
+  loại lỗi)
+- ✅ Report cuối (Pass/Fail/Blocked/Not run + sheet Bug list)
+- ✅ CLI đầy đủ: `prepare-tests` (docs → testcase + script, chỉ sinh) →
+  `run-tests` (chạy + xuất report) — đúng 2 lệnh cho toàn bộ luồng
+  WTS/MWTS, với 1 điểm dừng cố ý để review script trước khi chạy.
 - ⬜ Mobile Runner (MTS, Android/iOS)
-- ⬜ Reporting (gộp kết quả `history.db` trở lại vào file Excel —
-  Pass/Fail/Blocked/Not run, kèm sheet Bug list)
 - ⬜ Redmine API thật (hiện chỉ đọc file `.txt`/`.md` đã export tay)
 
 ## An toàn

@@ -77,6 +77,14 @@ def record_run(
     return cur.lastrowid
 
 
+def get_latest_run(conn: sqlite3.Connection, testcase_id: str) -> dict | None:
+    row = conn.execute(
+        "SELECT * FROM runs WHERE testcase_id = ? ORDER BY id DESC LIMIT 1",
+        (testcase_id,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
 def get_pending_review(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
         """

@@ -5,6 +5,7 @@ from qwen_test_automation.history.db import (
     get_testcase,
     record_run,
     get_pending_review,
+    get_latest_run,
 )
 
 
@@ -52,3 +53,19 @@ def test_record_run_accepts_blocked_status(tmp_path):
     insert_testcase(conn, make_testcase())
     run_id = record_run(conn, "TC-001", "blocked", None, "host not in allowlist")
     assert isinstance(run_id, int)
+
+
+def test_get_latest_run_returns_none_when_no_run(tmp_path):
+    conn = init_db(str(tmp_path / "history.db"))
+    insert_testcase(conn, make_testcase())
+    assert get_latest_run(conn, "TC-001") is None
+
+
+def test_get_latest_run_returns_most_recent(tmp_path):
+    conn = init_db(str(tmp_path / "history.db"))
+    insert_testcase(conn, make_testcase())
+    record_run(conn, "TC-001", "pending_claude_review", "locator", "first")
+    record_run(conn, "TC-001", "pass", None, "second")
+    result = get_latest_run(conn, "TC-001")
+    assert result["status"] == "pass"
+    assert result["message"] == "second"
